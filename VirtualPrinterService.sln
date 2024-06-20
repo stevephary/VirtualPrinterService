@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.9.34728.123
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VirtualPrinterService", "VirtualPrinterService.csproj", "{FC9A7D6F-0622-42AD-92C1-7537C0167320}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FC9A7D6F-0622-42AD-92C1-7537C0167320}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FC9A7D6F-0622-42AD-92C1-7537C0167320}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FC9A7D6F-0622-42AD-92C1-7537C0167320}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FC9A7D6F-0622-42AD-92C1-7537C0167320}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {D733CD50-B8B1-4653-986A-A504A8FF31F5}
+	EndGlobalSection
+EndGlobal
