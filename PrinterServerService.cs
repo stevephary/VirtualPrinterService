@@ -1,10 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
+using Aspose.Words.Shaping;
 
 namespace VirtualPrinterService
 {
@@ -14,25 +14,26 @@ namespace VirtualPrinterService
         string author,
         string filename
     );
-    public  class PrinterServerService
+
+    public class PrinterServerService
     {
-        private readonly string ?printerName;
-        private  string ip;
-        private  int port;
+        private readonly string printerName;
+        private string ip;
+        private int port;
         private readonly bool autoInstallPrinter;
-        private readonly PrintCallbackFunctionType? printCallbackFn;
+        private readonly PrintCallbackFunctionType printCallbackFn;
         private bool running;
         private bool keepGoing;
-        private PrinterManagementService ?osPrinterManager;
-        private string? printerPortName;
+        private PrinterManagementService osPrinterManager;
+        private string printerPortName;
 
         public PrinterServerService(
-           string printerName = "My Virtual Printer",
-           string ip = "127.0.0.1",
-           int port = 9001,
-           bool autoInstallPrinter = true,
-           PrintCallbackFunctionType printCallbackFn = null
-       )
+            string printerName = "My Virtual Printer",
+            string ip = "127.0.0.1",
+            int port = 9100,
+            bool autoInstallPrinter = true,
+            PrintCallbackFunctionType printCallbackFn = null
+        )
         {
             this.printerName = printerName;
             this.ip = ip;
@@ -91,7 +92,7 @@ namespace VirtualPrinterService
             listener.Start();
 
             IPEndPoint localEndpoint = (IPEndPoint)listener.LocalEndpoint;
-           ip = localEndpoint.Address.ToString();
+            ip = localEndpoint.Address.ToString();
             port = localEndpoint.Port;
 
             Console.WriteLine($"Opening {ip}:{port}");
@@ -118,83 +119,28 @@ namespace VirtualPrinterService
                 TcpClient client = listener.AcceptTcpClient();
                 NetworkStream stream = client.GetStream();
 
-                if (printCallbackFn == null)
+                // Read the incoming binary data and process it
+                using (MemoryStream memoryStream = new MemoryStream())
                 {
-                    using (FileStream fileStream = new FileStream("I_printed_this.ps", FileMode.Create, FileAccess.Write))
-                    {
-                        stream.CopyTo(fileStream);
-                    }
-                }
-                else
-                {
-                    List<string> buffer = new List<string>();
-                    using (StreamReader reader = new StreamReader(stream, Encoding.UTF8))
-                    {
-                        string data;
-                        while ((data = reader.ReadLine()) != null)
-                        {
-                            buffer.Add(data);
-                        }
-                    }
+                    stream.CopyTo(memoryStream);
+                    byte[] documentContent = memoryStream.ToArray();
+                    string fulldoc = Convert.ToBase64String(documentContent);
+                    Console.WriteLine("Received document content");
 
-                    string combinedBuffer = string.Join(Environment.NewLine, buffer);
-                    string author = null, title = null, filename = null;
-                    string header = "@" + combinedBuffer.Split(new[] { "%!PS-" }, StringSplitOptions.None)[0].Split('@')[1];
+                    string pdfText = ExtractPdfText(documentContent);
+                    Console.WriteLine(pdfText);
 
-                    foreach (var line in header.Split('\n'))
+                    // Prompt user to print the document
+                    Console.Write("Do you want to print the document? (yes/no): ");
+                    string input = Console.ReadLine()?.ToLower();
+
+                    if (input == "yes" || input == "y")
                     {
-                        var trimmedLine = line.Trim();
-                        if (trimmedLine.StartsWith("@PJL JOB NAME="))
-                        {
-                            var name = trimmedLine.Split('"')[1];
-                            if (File.Exists(name))
-                            {
-                                filename = name;
-                            }
-                            else
-                            {
-                                title = name;
-                            }
-                        }
-                        else if (trimmedLine.StartsWith("@PJL COMMENT"))
-                        {
-                            var parameters = trimmedLine.Split('"')[1].Split(';');
-                            foreach (var param in parameters)
-                            {
-                                var kv = param.Split(':');
-                                if (kv.Length > 1)
-                                {
-                                    kv[0] = kv[0].Trim().ToLower();
-                                    kv[1] = kv[1].Trim();
-                                    if (kv[0] == "username")
-                                    {
-                                        author = kv[1];
-                                    }
-                                    else if (kv[0] == "app filename")
-                                    {
-                                        if (title == null)
-                                        {
-                                            if (File.Exists(kv[1]))
-                                            {
-                                                filename = kv[1];
-                                            }
-                                            else
-                                            {
-                                                title = kv[1];
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        // Call PrintCallback to process the document content
+                        printCallbackFn?.Invoke(fulldoc, "Print Job Title", "Print Job Author", "Print Job File");
+                        // Save the document content with title and author regardless of print decision
+                        SaveDocumentContent(documentContent, "Print Job Title", "Print Job Author");
                     }
-
-                    if (title == null && filename != null)
-                    {
-                        title = Path.GetFileNameWithoutExtension(filename);
-                    }
-
-                    printCallbackFn(combinedBuffer, title, author, filename);
                 }
 
                 client.Close();
@@ -204,7 +150,68 @@ namespace VirtualPrinterService
             listener.Stop();
         }
 
+        private void SaveDocumentContent(byte[] content, string title, string author)
+        {
+            // Determine the path for saving documents (you can adjust this path as needed)
+            string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+
+            // Generate a unique file name or use a timestamp-based name
+            string fileName = GenerateFileName(title, author);
+
+            // Combine the path and file name
+            string filePath = Path.Combine(documentsPath, fileName);
+
+            // Write the content to the file
+            File.WriteAllBytes(filePath, content);
+
+            Console.WriteLine($"Document saved: {filePath}");
+        }
+
+        private string ExtractPdfText(byte[] pdfBytes)
+        {
+            using (MemoryStream ms = new MemoryStream(pdfBytes))
+            {
+                iTextSharp.text.pdf.PdfReader reader = new iTextSharp.text.pdf.PdfReader(ms);
+                StringBuilder sb = new StringBuilder();
+
+                for (int page = 1; page <= reader.NumberOfPages; page++)
+                {
+                    iTextSharp.text.pdf.parser.ITextExtractionStrategy extractor = new iTextSharp.text.pdf.parser.SimpleTextExtractionStrategy();
+                    string pageText = iTextSharp.text.pdf.parser.PdfTextExtractor.GetTextFromPage(reader, page, extractor);
+                    sb.AppendLine(pageText);
+                }
+
+                reader.Close();
+                return sb.ToString();
+            }
+        }
 
 
+        private string GenerateFileName(string title, string author)
+        {
+            // Use current timestamp as default if title or author information is not provided
+            string timestamp = DateTime.Now.ToString("yyyyMMddHHmmss");
+
+            // Use title and author if available, otherwise use timestamp
+            string fileName = !string.IsNullOrWhiteSpace(title) && !string.IsNullOrWhiteSpace(author)
+                ? $"{SanitizeFileName(title)} - {SanitizeFileName(author)}_{timestamp}.pdf"
+                : $"Document_{timestamp}.pdf";
+
+            // Replace invalid characters for file names with underscores
+            fileName = SanitizeFileName(fileName);
+
+            return fileName;
+        }
+
+        private string SanitizeFileName(string fileName)
+        {
+            // Remove invalid characters from file name
+            foreach (char c in Path.GetInvalidFileNameChars())
+            {
+                fileName = fileName.Replace(c, '_');
+            }
+
+            return fileName;
+        }
     }
 }
